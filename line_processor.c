@@ -2,7 +2,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>
-#include <unistd.h>
 
 #define LINES_TO_READ 50
 #define BUFFER_SIZE 1000
@@ -30,6 +29,11 @@ pthread_cond_t input_full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t space_full = PTHREAD_COND_INITIALIZER;
 pthread_cond_t plus_full = PTHREAD_COND_INITIALIZER;
 
+int read_thread_exit = 0;
+int space_thread_exit = 0;
+int plus_thread_exit = 0;
+int output_thread_exit = 0;
+
 
 void collect_input_data(int index){
 
@@ -47,7 +51,7 @@ void collect_input_data(int index){
     pthread_mutex_unlock(&input_mutex);
 
     if (strcmp(temp_buff, "STOP\n") == 0){
-        pthread_exit(NULL);
+        read_thread_exit = 1;
     }
 
 }
@@ -55,6 +59,7 @@ void collect_input_data(int index){
 void *get_input(){
 
     for (int i = 0; i < LINES_TO_READ; i++){
+        if (read_thread_exit == 1) break;
         collect_input_data(i);
     }
     return NULL;
@@ -62,7 +67,6 @@ void *get_input(){
 
 void replace_lines(int index){
 
-    int exit = 0;
     char temp_buff[BUFFER_SIZE];
     memset(temp_buff, '\0', BUFFER_SIZE);
 
@@ -73,7 +77,7 @@ void replace_lines(int index){
 
     strcpy(temp_buff, input_buffer[index]);
     if (strcmp(temp_buff, "STOP\n") == 0){
-        exit = 1;
+        space_thread_exit = 1;
     }
     input_lines_pending--;
     pthread_mutex_unlock(&input_mutex);
@@ -81,7 +85,7 @@ void replace_lines(int index){
     size_t len = strlen(temp_buff);
     for (size_t i = 0; i < len; i++) {
         if (temp_buff[i] == '\n'){
-            if (exit == 0) {
+            if (space_thread_exit == 0) {
                 temp_buff[i] = ' ';
             }
         }
@@ -95,20 +99,18 @@ void replace_lines(int index){
     space_lines_read++;
     pthread_cond_signal(&space_full);
     pthread_mutex_unlock(&space_mutex);
-    if (exit == 1){
-        pthread_exit(NULL);
-    }
 }
 
 void *add_spaces(){
     for (int i = 0; i < LINES_TO_READ; i++){
+        if (space_thread_exit == 1) break;
         replace_lines(i);
     }
     return NULL;
 }
 
 void fix_plus(int index){
-    int exit = 0;
+
     char temp_buff[BUFFER_SIZE];
     memset(temp_buff, '\0', BUFFER_SIZE);
 
@@ -121,10 +123,10 @@ void fix_plus(int index){
     pthread_mutex_unlock(&space_mutex);
 
     if (strcmp(temp_buff, "STOP\n") == 0){
-        exit = 1;
+        plus_thread_exit = 1;
     }
 
-    if (exit == 0) {
+    if (plus_thread_exit == 0) {
         size_t len = strlen(temp_buff);
         int read_ptr = 0;
         int write_ptr = 0;
@@ -154,15 +156,13 @@ void fix_plus(int index){
     plus_lines_read++;
     pthread_cond_signal(&plus_full);
     pthread_mutex_unlock(&plus_mutex);
-    if (exit == 1){
-        pthread_exit(NULL);
-    }
 
 }
 
 
 void *fix_plus_pair(){
     for (int i = 0; i < LINES_TO_READ; i++){
+        if (plus_thread_exit == 1) break;
         fix_plus(i);
     }
     return NULL;
@@ -179,39 +179,47 @@ void do_output(int index){
     strcpy(temp_buff, plus_buffer[index]);
 
     if (strcmp(temp_buff, "STOP\n") == 0){
-        pthread_exit(NULL);
+        output_thread_exit = 1;
     }
 
-    plus_lines_pending--;
-    pthread_mutex_unlock(&plus_mutex);
+    if (output_thread_exit == 0) {
+        plus_lines_pending--;
+        pthread_mutex_unlock(&plus_mutex);
 
-    // do output copying here.
-    int char_count = 0;
-    int read_ptr = strlen(output_buffer);
-    size_t len = strlen(temp_buff);
+        // do output copying here.
+        int char_count = 0;
+        int read_ptr = strlen(output_buffer);
+        size_t len = strlen(temp_buff);
 
-    while (char_count < (int)len){
-        if (read_ptr < LINE_LENGTH){
-            output_buffer[read_ptr] = temp_buff[char_count];
-            char_count++;
-            read_ptr++;
-        }
-        if (read_ptr == LINE_LENGTH) {
-            printf("%s\n", output_buffer);
-            memset(output_buffer, '\0', BUFFER_SIZE);
-            read_ptr = 0;
+        while (char_count < (int) len) {
+            if (read_ptr < LINE_LENGTH) {
+                output_buffer[read_ptr] = temp_buff[char_count];
+                char_count++;
+                read_ptr++;
+            }
+            if (read_ptr == LINE_LENGTH) {
+                printf("%s\n", output_buffer);
+                memset(output_buffer, '\0', BUFFER_SIZE);
+                read_ptr = 0;
+            }
         }
     }
 }
 
 void *send_output(){
     for (int i = 0; i < LINES_TO_READ; i++){
+        if (output_thread_exit == 1) break;
         do_output(i);
     }
     return NULL;
 }
 
 int main() {
+
+    //todo: thread safety implementation
+    //todo: naming of functions so they don't suck
+    //todo: figure out why I need 8 functions instead of 4
+    //todo: comment the code
 
     memset(output_buffer, '\0', BUFFER_SIZE);
     pthread_t read_thread, space_thread, plus_thread, output_thread;
