@@ -52,7 +52,7 @@ void collect_input_data(int index){
 
 }
 
-void *get_input(void *args){
+void *get_input(){
 
     for (int i = 0; i < LINES_TO_READ; i++){
         collect_input_data(i);
@@ -100,7 +100,7 @@ void replace_lines(int index){
     }
 }
 
-void *add_spaces(void *args){
+void *add_spaces(){
     for (int i = 0; i < LINES_TO_READ; i++){
         replace_lines(i);
     }
@@ -128,7 +128,7 @@ void fix_plus(int index){
         size_t len = strlen(temp_buff);
         int read_ptr = 0;
         int write_ptr = 0;
-        while (read_ptr < len) {
+        while (read_ptr < (int)len) {
             if (temp_buff[read_ptr] == '+' && read_ptr < BUFFER_SIZE - 1 && temp_buff[read_ptr + 1] == '+') {
                 temp_buff[write_ptr] = '^';
                 read_ptr++;
@@ -161,7 +161,7 @@ void fix_plus(int index){
 }
 
 
-void *fix_plus_pair(void *args){
+void *fix_plus_pair(){
     for (int i = 0; i < LINES_TO_READ; i++){
         fix_plus(i);
     }
@@ -190,20 +190,21 @@ void do_output(int index){
     int read_ptr = strlen(output_buffer);
     size_t len = strlen(temp_buff);
 
-    while (char_count < len){
-        if (read_ptr == LINE_LENGTH){
-            printf("%s\n", output_buffer);
-            memset(output_buffer, '\0', BUFFER_SIZE);
-            read_ptr = 0;
-        } else if (read_ptr < LINE_LENGTH){
+    while (char_count < (int)len){
+        if (read_ptr < LINE_LENGTH){
             output_buffer[read_ptr] = temp_buff[char_count];
             char_count++;
             read_ptr++;
         }
+        if (read_ptr == LINE_LENGTH) {
+            printf("%s\n", output_buffer);
+            memset(output_buffer, '\0', BUFFER_SIZE);
+            read_ptr = 0;
+        }
     }
 }
 
-void *send_output(void *args){
+void *send_output(){
     for (int i = 0; i < LINES_TO_READ; i++){
         do_output(i);
     }
